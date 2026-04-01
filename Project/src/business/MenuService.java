@@ -222,62 +222,118 @@ public class MenuService {
         }
     }
 
-    public void viewOrder(int userId) {
-        try (Connection conn = DBConnection.getConnection()) {
+    public void viewPendingOrders() throws Exception {
+        String sql = "SELECT od.id, m.name, od.quantity, od.status, " +
+                "t.name AS table_name, u.username " +
+                "FROM order_details od " +
+                "JOIN menu_items m ON od.menu_item_id = m.id " +
+                "JOIN orders o ON od.order_id = o.id " +
+                "JOIN restaurant_tables t ON o.table_id = t.id " +
+                "JOIN users u ON o.user_id = u.id " +
+                "WHERE od.status != 'SERVED'";   // ✅ CHỖ QUAN TRỌNG
 
-            String sql = """
-            SELECT t.name AS table_name,
-                   m.name AS food_name,
-                   od.quantity,
-                   m.price,
-                   (od.quantity * m.price) AS total
-            FROM orders o
-            JOIN restaurant_tables t ON o.table_id = t.id
-            JOIN order_details od ON o.id = od.order_id
-            JOIN menu_items m ON od.menu_item_id = m.id
-            WHERE o.user_id = ?
-        """;
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
 
-            PreparedStatement ps = conn.prepareStatement(sql);
-            ps.setInt(1, userId);
-
-            ResultSet rs = ps.executeQuery();
-
-            boolean found = false;
-            String tableName = "";
-
-            System.out.println("\n====== MÓN ĐÃ GỌI ======");
-
-            double grandTotal = 0;
+            System.out.println("\n===== DANH SÁCH MÓN (CHƯA SERVED) =====");
 
             while (rs.next()) {
-                if (!found) {
-                    tableName = rs.getString("table_name");
-                    System.out.println("Bàn: " + tableName);
-                    System.out.printf("| %-20s | %-8s | %-10s | %-10s |\n", "Tên món", "SL", "Giá", "Tổng");
-                    System.out.println("----------------------------------------------------------");
-                    found = true;
-                }
+                System.out.println("ID: " + rs.getInt("id")
+                        + " | Món: " + rs.getString("name")
+                        + " | SL: " + rs.getInt("quantity")
+                        + " | Trạng thái: " + rs.getString("status")
+                        + " | Bàn: " + rs.getString("table_name")
+                        + " | Khách: " + rs.getString("username"));
+            }
+        }
+    }
 
-                double total = rs.getDouble("total");
-                grandTotal += total;
+    public void updateOrderStatus(int orderDetailId, String status) {
+        String sql = "UPDATE order_details SET status = ? WHERE id = ?";
 
-                System.out.printf("| %-20s | %-8d | %-10.0f | %-10.0f |\n",
-                        rs.getString("food_name"),
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, status);
+            ps.setInt(2, orderDetailId);
+
+            int rows = ps.executeUpdate();
+
+            if (rows > 0) {
+                System.out.println("Cập nhật trạng thái thành công!");
+            } else {
+                System.out.println("Không tìm thấy ID!");
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private boolean isValidTransition(String current, String next) {
+        return (current.equals("PENDING") && next.equals("COOKING")) ||
+                (current.equals("COOKING") && next.equals("READY")) ||
+                (current.equals("READY") && next.equals("SERVED"));
+    }
+
+    public void viewMyOrders(int userId) {
+        String sql = """
+        SELECT rt.name AS table_name,
+               m.name AS item_name,
+               od.quantity,
+               od.status
+        FROM order_details od
+        JOIN orders o ON od.order_id = o.id
+        JOIN menu_items m ON od.menu_item_id = m.id
+        JOIN restaurant_tables rt ON o.table_id = rt.id
+        WHERE o.user_id = ?
+        ORDER BY od.status
+    """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, userId);
+            ResultSet rs = ps.executeQuery();
+
+            System.out.println("\n====== MÓN BẠN ĐÃ GỌI ======");
+            System.out.printf("| %-10s | %-20s | %-5s | %-10s |\n",
+                    "Bàn", "Tên món", "SL", "Trạng thái");
+            System.out.println("------------------------------------------------------");
+
+            boolean found = false;
+
+            while (rs.next()) {
+                found = true;
+
+                String status = formatStatus(rs.getString("status"));
+
+                System.out.printf("| %-10s | %-20s | %-5d | %-10s |\n",
+                        rs.getString("table_name"),
+                        rs.getString("item_name"),
                         rs.getInt("quantity"),
-                        rs.getDouble("price"),
-                        total);
+                        status);
             }
 
             if (!found) {
                 System.out.println("Bạn chưa gọi món nào!");
             } else {
-                System.out.println("----------------------------------------------------------");
-                System.out.println("TỔNG TIỀN: " + grandTotal);
+                System.out.println("======================================================");
             }
 
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    private String formatStatus(String status) {
+        switch (status) {
+            case "PENDING": return " PENDING";
+            case "COOKING": return " COOKING";
+            case "READY": return " READY";
+            case "SERVED": return " SERVED";
+            default: return status;
         }
     }
 }

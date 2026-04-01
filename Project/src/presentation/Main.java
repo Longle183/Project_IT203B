@@ -66,6 +66,8 @@ public class Main {
 
             else if (RoleService.isChef(user)) {
                 System.out.println("1. Xem menu");
+                System.out.println("2. Xem trạng thái món");
+                System.out.println("3. Cập nhật trạng thái món");
                 System.out.println("0. Đăng xuất");
 
                 int choice = Integer.parseInt(sc.nextLine());
@@ -73,6 +75,22 @@ public class Main {
                 switch (choice) {
                     case 1:
                         menuService.viewMenu();
+                        break;
+                    case 2:
+                        menuService.viewPendingOrders();
+                        break;
+                    case 3:
+                        menuService.viewPendingOrders();
+
+                        System.out.print("Nhập ID order detail: ");
+                        int orderDetailId = Integer.parseInt(sc.nextLine());
+
+                        System.out.print("Nhập trạng thái (PENDING/COOKING/READY/SERVED): ");
+                        String status = sc.nextLine().toUpperCase();
+
+                        menuService.updateOrderStatus(orderDetailId, status);
+
+                        menuService.viewPendingOrders();
                         break;
                     case 0:
                         return;
@@ -105,7 +123,7 @@ public class Main {
                         menuService.orderFood(user.getId());
                         break;
                     case 5:
-                        menuService.viewOrder(user.getId());
+                        menuService.viewMyOrders(user.getId());
                         break;
                     case 0:
                         return;
